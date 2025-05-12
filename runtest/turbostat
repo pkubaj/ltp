@@ -1,0 +1,4 @@
+#TURBOSTAT
+added_perf_counters turbostat01.sh
+defcolumns turbostat02.sh
+smi_aperf_mperf turbostat03.sh
