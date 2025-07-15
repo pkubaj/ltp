@@ -10,3 +10,6 @@
 [submodule "tools/ltx/ltx-src"]
 	path = tools/ltx/ltx-src
 	url = https://github.com/linux-test-project/ltx.git
+[submodule "testcases/kernel/io/usb4/ccd-linux-tools"]
+	path = testcases/kernel/io/usb4/ccd-linux-tools
+	url = https://github.com/intel-sandbox/ccd-linux-tools.git
