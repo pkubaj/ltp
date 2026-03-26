@@ -29,6 +29,7 @@ SUBDIRS			+= connectors \
 			   ipc \
 			   irq \
 			   logging \
+			   mce \
 			   mem \
 			   numa \
 			   power_management \
