@@ -649,6 +649,7 @@ void tst_kcmdline_parse(struct tst_kcmdline_var params[], size_t params_len)
 	char buf[256], line[1024];
 	size_t b_pos = 0,l_pos =0, i;
 	int var_id = -1;
+	bool param_has_value = true;
 
 	FILE *f = SAFE_FOPEN("/proc/cmdline", "r");
 
@@ -669,15 +670,22 @@ void tst_kcmdline_parse(struct tst_kcmdline_var params[], size_t params_len)
 					params[i].found = true;
 				}
 			}
-
+			param_has_value = true;
 			b_pos = 0;
 		break;
 		case ' ':
 		case '\n':
 			buf[b_pos] = '\0';
-			if (var_id >= 0 && var_id < (int)params_len)
-				strcpy(params[var_id].value, buf);
-
+			if (param_has_value) {
+				if (var_id >= 0 && var_id < (int)params_len)
+					strcpy(params[var_id].value, buf);
+			} else {
+				for (i = 0; i < params_len; i++) {
+					if (strcmp(buf, params[i].key) == 0)
+						params[i].found = true;
+				}
+			};
+			param_has_value = false;
 			var_id = -1;
 			b_pos = 0;
 		break;
