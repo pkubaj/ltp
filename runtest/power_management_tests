@@ -1,4 +1,5 @@
 #POWER_MANAGEMENT
+rfim rfim
 runpwtests01 runpwtests01.sh
 runpwtests02 runpwtests02.sh
 runpwtests03 runpwtests03.sh
