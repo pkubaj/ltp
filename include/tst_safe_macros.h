@@ -517,4 +517,10 @@ int safe_statvfs(const char *file, const int lineno,
 #define SAFE_STATVFS(path, buf) \
 	safe_statvfs(__FILE__, __LINE__, (path), (buf))
 
+int find_in_file(const char *file, const int lineno, const char *path,
+    const char *search);
+
+#define FIND_IN_FILE(path, search) \
+	find_in_file(__FILE__, __LINE__, (path), (search))
+
 #endif /* TST_SAFE_MACROS_H__ */

@@ -28,8 +28,11 @@
 
 #include "test.h"
 #include "tst_kconfig.h"
+#include "tst_safe_macros.h"
 #include "tso_priv.h"
 #include "tso_module.h"
+
+#define MODULES_FILE "/proc/modules"
 
 void tst_module_exists_(void (cleanup_fn)(void),
 	const char *mod_name, char **mod_path)
@@ -173,4 +176,15 @@ void tst_module_reload(const char *mod_name, char *const argv[])
 	tst_resm(TINFO, "Reloading kernel module %s", mod_name);
 	tst_module_unload_(NULL, mod_name);
 	tst_modprobe(mod_name, argv);
+}
+
+int tst_is_module_loaded(const char *mod_name)
+{
+	int loaded = FIND_IN_FILE(MODULES_FILE, mod_name);
+
+	if (loaded)
+		tst_resm(TINFO, "%s is found in %s", mod_name, MODULES_FILE);
+	else
+		tst_resm(TINFO, "%s is not found in %s", mod_name, MODULES_FILE);
+	return loaded;
 }

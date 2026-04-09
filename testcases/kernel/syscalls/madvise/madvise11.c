@@ -25,6 +25,7 @@
 #include "tst_test.h"
 #include "tst_safe_pthread.h"
 #include "tst_safe_stdio.h"
+#include "tst_module.h"
 #include "lapi/mmap.h"
 
 #define NUM_LOOPS	5
@@ -262,25 +263,6 @@ static int populate_from_klog(char *begin_tag, unsigned long *pfns, int max)
 	return found;
 }
 
-/*
- * Read the given file to search for the key.
- * Return 1 if the key is found.
- */
-static int find_in_file(char *path, char *key)
-{
-	char line[4096];
-	int found = 0;
-	FILE *file = SAFE_FOPEN(path, "r");
-
-	while (fgets(line, sizeof(line), file)) {
-		if (strstr(line, key)) {
-			found = 1;
-			break;
-		}
-	}
-	SAFE_FCLOSE(file);
-	return found;
-}
 
 static void unpoison_this_pfn(unsigned long pfn, int fd)
 {
@@ -299,7 +281,7 @@ static int open_unpoison_pfn(void)
 	struct mntent *mnt;
 	FILE *mntf;
 
-	if (!find_in_file("/proc/modules", HW_MODULE) && tst_check_builtin_driver(HW_MODULE))
+	if (!tst_is_module_loaded(HW_MODULE) && tst_check_builtin_driver(HW_MODULE))
 		hwpoison_probe = 1;
 
 	/* probe hwpoison only if it isn't already there */

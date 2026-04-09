@@ -829,3 +829,20 @@ int safe_statvfs(const char *file, const int lineno,
 
 	return rval;
 }
+
+int find_in_file(const char *file, const int lineno, const char *path,
+	const char *search)
+{
+	char line[PATH_MAX];
+	FILE *f = safe_fopen(file, lineno, NULL, path, "r");
+	int found = 0;
+
+	while (fgets(line, sizeof(line), f)) {
+		if (strstr(line, search)) {
+			found = 1;
+			break;
+		};
+	};
+	safe_fclose(file, lineno, NULL, f);
+	return found;
+};
