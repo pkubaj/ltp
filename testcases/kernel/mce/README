@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Helena Anna Dubel <helena.anna.dubel@intel.com>
+
+MCELOG - CPU platform support check
+-----------------------------------
+
+The test require the Kernel to be compiled with the following config's
+
+for MCELOG test:
+
+CONFIG_X86_MCE
+CONFIG_X86_MCELOG_LEGACY
+CONFIG_X86_MCE_INJECT
+
+Test Script for MCELOG:
+mcelog_model_support_check.c
+
+Some distributions for client platform does not contain mcelog tool in their
+releases, also client parts can not support BIOS options for error injection.
+According to it the test require following tools to be installed on tested
+system for MCELOG test:
+
+mcelog
+mce-inject
