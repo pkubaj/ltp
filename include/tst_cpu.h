@@ -20,5 +20,6 @@ long tst_ncpus_available(void);
 #define VIRT_OTHER	0xffff	/* unrecognized hypervisor */
 
 int tst_is_virt(int virt_type);
+char *tst_get_cpuinfo(int cpu, char *item);
 
 #endif	/* TST_CPU_H__ */

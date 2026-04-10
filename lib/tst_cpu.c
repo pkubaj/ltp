@@ -19,9 +19,13 @@
 
 #include "lapi/cpuset.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#define TST_NO_DEFAULT_MAIN
 #include "tst_test.h"
+#include "tst_safe_stdio.h"
 
 long tst_ncpus(void)
 {
@@ -96,3 +100,42 @@ long tst_ncpus_available(void)
 	return tst_ncpus();
 #endif
 }
+
+#define CPUINFO_FILE "/proc/cpuinfo"
+#define MAX_LINE 1024
+
+char *tst_get_cpuinfo(int cpu, char *item)
+{
+#ifdef __x86_64__
+	char line[MAX_LINE];
+	char *item_value = tst_alloc(MAX_LINE);
+	char *_value;
+	bool cpu_found = false;
+	FILE *f = SAFE_FOPEN(CPUINFO_FILE, "r");
+	int _cpu;
+	int size_s;
+
+	while (fgets(line, sizeof(line), f)) {
+		if (cpu_found) {
+			if (strstr(line, item)) {
+				_value = strchr(line, ':');
+				if (_value) {
+				    size_s = strlen(_value);
+					// delete two first chars ': '
+					strncpy(item_value, _value + 2, size_s);
+					item_value[strcspn(item_value, "\n")] = '\0';
+					break;
+				};
+			};
+		} else if (strstr(line, "processor")) {
+			SAFE_SSCANF(line, "processor : %d", &_cpu);
+			if (cpu == _cpu)
+				cpu_found = true;
+		}
+	};
+	SAFE_FCLOSE(f);
+	return item_value;
+#else /* __x86_64__ */
+	tst_brk(TBROK | TERRNO, "tst_get_cpuinfo - supports only x86_64 architecture.");
+#endif /* __x86_64__ */
+};
