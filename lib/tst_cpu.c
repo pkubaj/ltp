@@ -21,16 +21,15 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include "test.h"
-#include "tso_safe_macros.h"
+#include "tst_test.h"
 
 long tst_ncpus(void)
 {
 	long ncpus = -1;
 #ifdef _SC_NPROCESSORS_ONLN
-	ncpus = SAFE_SYSCONF(NULL, _SC_NPROCESSORS_ONLN);
+	ncpus = SAFE_SYSCONF(_SC_NPROCESSORS_ONLN);
 #else
-	tst_brkm(TBROK, NULL, "could not determine number of CPUs online");
+	tst_brk(TBROK, "could not determine number of CPUs online");
 #endif
 	return ncpus;
 }
@@ -39,9 +38,9 @@ long tst_ncpus_conf(void)
 {
 	long ncpus_conf = -1;
 #ifdef _SC_NPROCESSORS_CONF
-	ncpus_conf = SAFE_SYSCONF(NULL, _SC_NPROCESSORS_CONF);
+	ncpus_conf = SAFE_SYSCONF(_SC_NPROCESSORS_CONF);
 #else
-	tst_brkm(TBROK, NULL, "could not determine number of CPUs configured");
+	tst_brk(TBROK, "could not determine number of CPUs configured");
 #endif
 	return ncpus_conf;
 }
@@ -63,7 +62,7 @@ long tst_ncpus_max(void)
 	 *  "maximum number of CPUs which this kernel will support".
 	 *  This should provide cpu mask size large enough for any purposes. */
 	if (stat(KERNEL_MAX, &buf) == 0) {
-		SAFE_FILE_SCANF(NULL, KERNEL_MAX, "%ld", &ncpus_max);
+		SAFE_FILE_SCANF(KERNEL_MAX, "%ld", &ncpus_max);
 		/* this is maximum CPU index allowed by the kernel
 		 * configuration, so # of cpus allowed by config is +1 */
 		ncpus_max++;
@@ -82,10 +81,10 @@ long tst_ncpus_available(void)
 	cpu_set_t *cpus = CPU_ALLOC(ncpus);
 
 	if (!cpus)
-		tst_brkm(TBROK | TERRNO, NULL, "CPU_ALLOC(%zu)", cpusz);
+		tst_brk(TBROK | TERRNO, "CPU_ALLOC(%zu)", cpusz);
 
 	if (sched_getaffinity(0, cpusz, cpus)) {
-		tst_resm(TWARN | TERRNO, "sched_getaffinity(0, %zu, %zx)",
+		tst_res(TWARN | TERRNO, "sched_getaffinity(0, %zu, %zx)",
 			cpusz, (size_t)cpus);
 	} else {
 		ncpus = CPU_COUNT_S(cpusz, cpus);
