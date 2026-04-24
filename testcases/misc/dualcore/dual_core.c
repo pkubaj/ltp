@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Copyright (C) 2026 Intel - http://www.intel.com/
  * Copyright (C) 2026 Tomasz Ossowski tomasz.ossowski@intel.com
  */
 
