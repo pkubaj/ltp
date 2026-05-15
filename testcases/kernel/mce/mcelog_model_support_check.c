@@ -9,36 +9,24 @@
  * errors.
  */
 
-#include <sys/klog.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/version.h>
-#include "tst_module.h"
+
 #include "tst_test.h"
-#include "tst_kconfig.h"
-#include "tst_cpu.h"
 #include "tst_safe_stdio.h"
 #include "tst_safe_file_ops.h"
-
-#define TNAME "mcelog-cpu-model-number-support"
+#include "tst_module.h"
+#include "tst_kconfig.h"
+#include "tst_cpu.h"
 
 #define MCE_INJECT_MODULE "mce_inject"
-#define MCELOG_DAEMON "mcelog --daemon"
-#define LTPROOT "/opt/ltp"
 
-static char *TMP_MCE_DIR;
-static char *LOG_MCE_FILE;
-static bool NEEDS_TO_UNLOAD_MODULE;
-
-static char *get_tmpfile(char *name, char *marker)
+static char *get_tmpfile(char *name)
 {
-	const size_t file_size = strlen(TMP_MCE_DIR) + strlen(marker) + strlen(name) + 25;
+	char *tmp_path = tst_tmpdir_path();
+	const size_t file_size = strlen(tmp_path) + strlen(name) + 32;
 	char *file = tst_alloc(file_size);
 
-	snprintf(file, file_size, "%s/mcelog-%s-%s.txt", TMP_MCE_DIR, name, marker);
+	snprintf(file, file_size, "%s/mcelog-%s.txt", tmp_path, name);
 	return file;
 };
 
@@ -52,133 +40,117 @@ static void check_module_initialization(void)
 		tst_res(TWARN, "Improper configuration. Missing cmdline parameter.");
 };
 
-static void load_module_successfully(const char *const module)
+static void load_module(const char *const mod)
 {
-	if (tst_check_builtin_driver(module) == 0)
-		tst_res(TINFO, "Nothing to do. Module %s is built in driver.", module);
-	else {
-		if (!tst_is_module_loaded(module)) {
-			tst_res(TDEBUG, "Load %s module", module);
-			tst_modprobe(module, NULL);
-			if (!tst_is_module_loaded(module))
-				tst_brk(TBROK, "CONF ERROR: Cannot load %s module", module);
-			NEEDS_TO_UNLOAD_MODULE = true;
-		};
-		check_module_initialization();
-	};
-};
-
-static bool is_mcelog_daemon_run(void)
-{
-	const char *const cmd_psaux_mcelog[] = {"ps", "aux", NULL};
-	bool daemon_run = FIND_IN_CMD_EXEC(cmd_psaux_mcelog, MCELOG_DAEMON);
-
-	tst_res(TDEBUG, "Check if mce daemon is running");
-	if (daemon_run)
-		tst_res(TINFO, "%s - is running", MCELOG_DAEMON);
-	else
-		tst_res(TINFO, "%s - is not running", MCELOG_DAEMON);
-	return daemon_run;
-};
-
-static void kill_mce_daemon(void)
-{
-	const char *const cmd_pkill[] = {"pkill", "-f", MCELOG_DAEMON, NULL};
-
-	tst_res(TDEBUG, "Kill melog daemon process");
-	if (tst_cmd(cmd_pkill, NULL, NULL, TST_CMD_PASS_RETVAL) != 0)
-		tst_brk(TBROK, "CONF ERROR: Cannot kill mcelog daemon process.");
-	tst_res(TINFO, "melog daemon process - killed!");
-};
-
-static void deactive_mce_daemon(void)
-{
-	if (is_mcelog_daemon_run()) {
-		kill_mce_daemon();
-		if (is_mcelog_daemon_run())
-			tst_brk(TBROK, "CONF ERROR: Cannot deactivate mcelog with daemon mode.");
-		tst_res(TDEBUG, "%s - deactivated successfully", MCELOG_DAEMON);
+	if (tst_check_builtin_driver(mod) == 0) {
+		tst_res(TINFO, "%s built-in, skipping load", mod);
+		return;
 	}
+
+	if (!tst_is_module_loaded(mod)) {
+		tst_res(TDEBUG, "Loading module %s", mod);
+		tst_modprobe(mod, NULL);
+
+		if (!tst_is_module_loaded(mod))
+			tst_brk(TBROK, "CONF ERROR: Failed to load module %s", mod);
+
+	};
+	check_module_initialization();
 };
 
-static void load_mce_daemon(void)
+static void stop_mcelog(void)
 {
-	const char *const cmd_mcelog_daemon_run[] = {"mcelog", "--daemon", "--logfile", LOG_MCE_FILE, NULL};
+	int pid = -1;
 
-	deactive_mce_daemon();
+	FILE_SCANF("/var/run/mcelog.pid", "%d\n", &pid);
+	if (pid == -1) {
+		tst_res(TDEBUG, "mcelog daemon not running.");
+		return;
+	};
 
-	tst_res(TDEBUG, "Load mce daemon");
-	if (tst_cmd(cmd_mcelog_daemon_run, NULL, NULL, TST_CMD_PASS_RETVAL) != 0)
-		tst_brk(TBROK, "CONF ERROR: Cannot run mcelog daemon!");
+	char pid_str[32];
 
-	if (!is_mcelog_daemon_run())
-		tst_brk(TBROK, "CONF ERROR: mcelog daemon not running properly!");
+	snprintf(pid_str, sizeof(pid_str), "%d", pid);
 
+	const char *const cmd[] = {"kill", pid_str, NULL};
+
+	tst_res(TDEBUG, "Killing melog daemon process - pid: %d", pid);
+	if (tst_cmd(cmd, NULL, NULL, TST_CMD_PASS_RETVAL) != 0)
+		tst_brk(TBROK, "CONF ERROR: Failed to kill mcelog daemon process.");
+
+	tst_res(TINFO, "melog daemon process - killed!");
+	
+};
+
+static void start_mcelog(const char *logfile)
+{
+	const char *const cmd[] = {"mcelog", "--daemon", "--logfile", logfile, NULL};
+
+	tst_res(TDEBUG, "Starting mcelog daemon");
+	if (tst_cmd(cmd, NULL, NULL, TST_CMD_PASS_RETVAL) != 0)
+		tst_brk(TBROK, "CONF ERROR: Failed to start mcelog! Check if mcelog is already running.");
+	
 	tst_res(TINFO, "Successfully load melog daemon.");
-};
-
-static void setup(void)
-{
-	NEEDS_TO_UNLOAD_MODULE = false;
-	TMP_MCE_DIR = tst_tmpdir_path();
-	LOG_MCE_FILE = get_tmpfile("logfile", "logmarker");
-
-	load_module_successfully(MCE_INJECT_MODULE);
-	load_mce_daemon();
 };
 
 static void check_and_compare_cpu_values(int cpuvalue, int mcevalue, char *logtype)
 {
 	tst_res(TDEBUG, "Test: Compare values %s", logtype);
 	if (mcevalue != -1 && mcevalue == cpuvalue)
-		tst_res(TPASS, "CPUID %s show correctly by mcelog message.", logtype);
+		tst_res(TPASS, "CPUID %s printed correctly by mcelog message.", logtype);
 	else {
-		tst_res(TFAIL, "CPUID %s uncorrectly show by mcelog message.", logtype);
+		tst_res(TFAIL, "CPUID %s uncorrectly printed by mcelog message.", logtype);
 		tst_res(TDEBUG, "CPUID value: %d. MCE CPU value %d.", cpuvalue, mcevalue);
 	};
 }
 
 static void check_cpu_support(int cpu_family, int cpu_model)
 {
-	const char *const cmd_cpu_support[] = {"mcelog", "--is-cpu-supported", NULL};
-	const char *log_path = get_tmpfile("cpu_support", "marker");
-	const char *full_support_msg = "mcelog: Family %d Model %d CPU: only decoding architectural errors";
-	const char *support_msg = "only decoding architectural errors";
-	int mce_family = -1, mce_model = -1;
-
 	tst_res(TINFO, "Test 1: Check CPU support by mcelog.");
-	if (tst_cmd(cmd_cpu_support, NULL, log_path, TST_CMD_PASS_RETVAL) != 0)
-		tst_brk(TBROK, "Command 'mcelog --is-cpu-supported' not run properly.");
 
-	if (!FIND_IN_FILE(log_path, support_msg))
+	const char *const cmd[] = {"mcelog", "--is-cpu-supported", NULL};
+	const char *log_path = get_tmpfile("cpu_support");
+
+	if (tst_cmd(cmd, NULL, log_path, TST_CMD_PASS_RETVAL) != 0)
+		tst_brk(TBROK, "Command 'mcelog --is-cpu-supported' not run properly.");
+	
+	int c = fgetc(SAFE_FOPEN(log_path, "r"));
+	
+	if (c == "\n" || c == EOF) {
 		tst_res(TPASS, "CPU supported by mcelog.");
-	else {
-		if (SAFE_FILE_LINES_SCANF(log_path, full_support_msg, &mce_family, &mce_model) == 0) {
-			check_and_compare_cpu_values(cpu_family, mce_family, "Family");
-			check_and_compare_cpu_values(cpu_model, mce_model, "Model");
-		} else
-			tst_res(TFAIL, "Unpropertly show mce error message.");
-		tst_brk(TFAIL, "CPU not supported by mcelog - %s", support_msg);
+		return;
 	};
+
+	int mce_family = -1, mce_model = -1;
+	const char *msg = "mcelog: Family %d Model %d CPU: only decoding architectural errors";
+
+	if (SAFE_FILE_LINES_SCANF(log_path, msg, &mce_family, &mce_model) == 0) {
+		check_and_compare_cpu_values(cpu_family, mce_family, "Family");
+		check_and_compare_cpu_values(cpu_model, mce_model, "Model");
+	} else
+		tst_res(TFAIL, "Improperly displayed MCE error message");
+
+	tst_brk(TFAIL, "CPU not supported by mcelog - only decoding architectural errors");
 };
 
-static void mceinject_test(int cpu_family, int cpu_model, int cpu_step)
+static void mceinject_test(const char *log_mce_file, int cpu_family, int cpu_model, int cpu_step)
 {
 	const char *test_corrected = "testcases/data/mce/mce_test_corrected";
 	const size_t test_path_size = 252;
 	char test_path[test_path_size];
 
-	snprintf(test_path, test_path_size, "%s/%s", LTPROOT, test_corrected);
+	snprintf(test_path, test_path_size, "%s/%s", "/opt/ltp", test_corrected);
 
-	const char *const cmd_test_run[] = {"mce-inject", test_path, NULL};
+	const char *const cmd[] = {"mce-inject", test_path, NULL};
 	const char *search_mce_msg = "CPUID Vendor Intel Family %d Model %d Step %d";
 	const char *find_mce_msg = "MCE CPU values: Family %d, Model %d, Stepping %d";
 	int mce_family = -1, mce_model = -1, mce_step = -1;
 
 	tst_res(TINFO, "Test 2: MCELOG inject test");
-	tst_cmd(cmd_test_run, NULL, NULL, TST_CMD_PASS_RETVAL);
+	if (tst_cmd(cmd, NULL, NULL, TST_CMD_PASS_RETVAL) != 0)
+		tst_brk(TFAIL, "Failed to inject an error.");
 
-	if (SAFE_FILE_LINES_SCANF(LOG_MCE_FILE, search_mce_msg, &mce_family, &mce_model, &mce_step) != 0)
+	if (SAFE_FILE_LINES_SCANF(log_mce_file, search_mce_msg, &mce_family, &mce_model, &mce_step) != 0)
 		tst_res(TFAIL, "Something wrong with mcelog CPUID error information.");
 	else {
 		tst_res(TPASS, "CPU information correctly show in mcelog errors.");
@@ -189,50 +161,59 @@ static void mceinject_test(int cpu_family, int cpu_model, int cpu_step)
 	};
 };
 
+static void cleanup(bool unload_module)
+{
+	stop_mcelog();
+
+	if (unload_module) {
+		tst_res(TDEBUG, "Unload module %s", MCE_INJECT_MODULE);
+		tst_module_unload(MCE_INJECT_MODULE);
+		if (tst_is_module_loaded(MCE_INJECT_MODULE))
+			tst_brk(TFAIL, "Failed to unload module %s." MCE_INJECT_MODULE);
+	};
+};
+
+
 static void run(void)
 {
-	const char *tested_cpu_info = "Tested cpu family: %d, model: %d, stepping %d";
 	int cpu_family = -1, cpu_model = -1, cpu_step = -1;
+	const char *log_mce_file = get_tmpfile("logfile");
+	bool needs_to_unload_module = tst_is_module_loaded(MCE_INJECT_MODULE);
 
 	tst_parse_int(tst_get_cpuinfo(0, "cpu family"), &cpu_family, 0, INT_MAX);
 	tst_parse_int(tst_get_cpuinfo(0, "model"), &cpu_model, 0, INT_MAX);
 	tst_parse_int(tst_get_cpuinfo(0, "stepping"), &cpu_step, 0, INT_MAX);
-	tst_res(TDEBUG, tested_cpu_info, cpu_family, cpu_model, cpu_step);
 
+	cleanup(false);
+
+	load_module(MCE_INJECT_MODULE);
+	start_mcelog(log_mce_file);
 	check_cpu_support(cpu_family, cpu_model);
+	mceinject_test(log_mce_file, cpu_family, cpu_model, cpu_step);
 
-	mceinject_test(cpu_family, cpu_model, cpu_step);
-};
-
-static void cleanup(void)
-{
-	deactive_mce_daemon();
-	if (NEEDS_TO_UNLOAD_MODULE) {
-		tst_res(TDEBUG, "Unload module %s", MCE_INJECT_MODULE);
-		tst_module_unload_(NULL, MCE_INJECT_MODULE);
-		tst_is_module_loaded(MCE_INJECT_MODULE);
-	};
+	cleanup(needs_to_unload_module);
 };
 
 static struct tst_test test = {
+	.test_all = run,
+
 	.needs_root = 1,
 	.needs_tmpdir = 1,
+
 	.needs_kconfigs = (const char *[]) {
 		"CONFIG_X86_MCE",
 		"CONFIG_X86_MCELOG_LEGACY",
 		"CONFIG_X86_MCE_INJECT",
 	},
+
 	.needs_cmds = (struct tst_cmd[]) {
 		{.cmd = "mcelog"},
 		{.cmd = "mce-inject"},
 		{}
 	},
+
 	.supported_archs = (const char *const []) {
-		"x86",
 		"x86_64",
 		NULL
 	},
-	.setup = setup,
-	.test_all = run,
-	.cleanup = cleanup,
 };

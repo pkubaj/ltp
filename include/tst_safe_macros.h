@@ -521,6 +521,6 @@ int find_in_file(const char *file, const int lineno, const char *path,
     const char *search);
 
 #define FIND_IN_FILE(path, search) \
-	find_in_file(__FILE__, __LINE__, (path), (search))
+	get_finding_line(__FILE__, __LINE__, (path), (search))
 
 #endif /* TST_SAFE_MACROS_H__ */
