@@ -448,6 +448,9 @@ shell API. For tests using the new shell loader library, see
     * - .needs_cpu_vendor
       - \-
 
+    * - .needs_debugfs
+      - \-
+
     * - .needs_devfs
       - \-
 
