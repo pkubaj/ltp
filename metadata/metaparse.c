@@ -1169,6 +1169,7 @@ static struct typemap tst_test_typemap[] = {
 	{.id = "child_needs_reinit", .type = DATA_BOOL},
 	{.id = "runs_script", .type = DATA_BOOL},
 	{.id = "needs_devfs", .type = DATA_BOOL},
+	{.id = "needs_debugfs", .type = DATA_BOOL},
 	{.id = "restore_wallclock", .type = DATA_BOOL},
 	{.id = "all_filesystems", .type = DATA_BOOL},
 	{.id = "skip_in_lockdown", .type = DATA_BOOL},

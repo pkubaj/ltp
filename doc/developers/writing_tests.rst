@@ -440,6 +440,9 @@ LTP C And Shell Test API Comparison
     * - .needs_cmds
       - TST_NEEDS_CMDS
 
+    * - .needs_debugfs
+      - \-
+
     * - .needs_devfs
       - \-
 

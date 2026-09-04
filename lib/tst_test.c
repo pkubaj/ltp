@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <sys/mount.h>
 #include <sys/types.h>
+#include <sys/vfs.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <math.h>
@@ -82,6 +83,7 @@ struct context {
 	tst_atomic_t abort_flag;
 	uint32_t mntpoint_mounted:1;
 	uint32_t ovl_mounted:1;
+	uint32_t debugfs_mounted:1;
 	uint32_t tdebug;
 };
 
@@ -1210,6 +1212,31 @@ static void prepare_and_mount_dev_fs(const char *mntpoint)
 	}
 }
 
+static void mount_debugfs(void)
+{
+	struct statfs sfs;
+
+	/*
+	 * TST_DEBUGFS_PATH exists as a plain sysfs directory whenever
+	 * CONFIG_DEBUG_FS is enabled, whether or not debugfs is mounted on it,
+	 * so the filesystem type has to be checked rather than the directory
+	 * being present.
+	 */
+	if (statfs(TST_DEBUGFS_PATH, &sfs))
+		tst_brk(TCONF | TERRNO, "Can't statfs %s", TST_DEBUGFS_PATH);
+
+	if (sfs.f_type == TST_DEBUGFS_MAGIC)
+		return;
+
+	if (mount("debugfs", TST_DEBUGFS_PATH, "debugfs", 0, NULL)) {
+		tst_brk(TCONF | TERRNO, "Can't mount debugfs at %s",
+			TST_DEBUGFS_PATH);
+	}
+
+	tst_res(TINFO, "Mounted debugfs at %s", TST_DEBUGFS_PATH);
+	context->debugfs_mounted = 1;
+}
+
 static void prepare_and_mount_hugetlb_fs(void)
 {
 	if (access(PATH_MM_HUGEPAGES, F_OK))
@@ -1546,6 +1573,9 @@ static void do_setup(int argc, char *argv[])
 			"Two or more of needs_{rofs, devfs, device, hugetlbfs} are set");
 	}
 
+	if (tst_test->needs_debugfs)
+		mount_debugfs();
+
 	if (tst_test->needs_devfs)
 		prepare_and_mount_dev_fs(tst_test->mntpoint);
 
@@ -1656,6 +1686,11 @@ static void do_cleanup(void)
 
 	if (context->mntpoint_mounted)
 		tst_umount(tst_test->mntpoint);
+
+	if (context->debugfs_mounted) {
+		tst_umount(TST_DEBUGFS_PATH);
+		context->debugfs_mounted = 0;
+	}
 
 	if (tst_test->needs_device && tdev.dev)
 		tst_release_device(tdev.dev);
