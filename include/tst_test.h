@@ -358,6 +358,13 @@ struct tst_fs {
  *               needed for tests that need to create device files since tmpfs
  *               at /tmp is usually mounted with 'nodev' option.
  *
+ * @needs_debugfs: If set debugfs is mounted at TST_DEBUGFS_PATH i.e.
+ *                 /sys/kernel/debug, unless it is mounted there already, and
+ *                 the test exits with TCONF if it cannot be. The library
+ *                 unmounts it at the end of the test if it mounted it. Note
+ *                 that both mounting debugfs and reading its content require
+ *                 root, so tests using this also set tst_test.needs_root.
+ *
  * @restore_wallclock: Saves wall clock at the start of the test and restores
  *                     it at the end with the help of monotonic timers.
  *                     Testcases that modify system wallclock use this to
@@ -573,6 +580,7 @@ struct tst_fs {
 	unsigned int child_needs_reinit:1;
 	unsigned int runs_script:1;
 	unsigned int needs_devfs:1;
+	unsigned int needs_debugfs:1;
 	unsigned int restore_wallclock:1;
 
 	unsigned int all_filesystems:1;
