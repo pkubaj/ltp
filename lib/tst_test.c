@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <sys/mount.h>
 #include <sys/types.h>
+#include <sys/vfs.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <math.h>
@@ -82,6 +83,7 @@ struct context {
 	tst_atomic_t abort_flag;
 	uint32_t mntpoint_mounted:1;
 	uint32_t ovl_mounted:1;
+	uint32_t debugfs_mounted:1;
 	uint32_t tdebug;
 };
 
@@ -1087,6 +1089,21 @@ static bool check_kver(const char *min_kver, const int brk_nosupp)
 	return true;
 }
 
+static void check_supported_kver(void)
+{
+	int v1, v2, v3;
+
+	if (tst_parse_kver(TST_MIN_KVER, &v1, &v2, &v3)) {
+		tst_res(TWARN,
+			"Invalid minimal kernel version %s, expected %%d.%%d.%%d",
+			TST_MIN_KVER);
+		return;
+	}
+
+	if (tst_kvercmp(v1, v2, v3) < 0)
+		tst_res(TWARN, "Kernel is older than minimal supported %s", TST_MIN_KVER);
+}
+
 /*
  * Checks if the struct results values are equal.
  *
@@ -1208,6 +1225,31 @@ static void prepare_and_mount_dev_fs(const char *mntpoint)
 		SAFE_MOUNT(NULL, mntpoint, "tmpfs", 0, NULL);
 		context->mntpoint_mounted = 1;
 	}
+}
+
+static void mount_debugfs(void)
+{
+	struct statfs sfs;
+
+	/*
+	 * TST_DEBUGFS_PATH exists as a plain sysfs directory whenever
+	 * CONFIG_DEBUG_FS is enabled, whether or not debugfs is mounted on it,
+	 * so the filesystem type has to be checked rather than the directory
+	 * being present.
+	 */
+	if (statfs(TST_DEBUGFS_PATH, &sfs))
+		tst_brk(TCONF | TERRNO, "Can't statfs %s", TST_DEBUGFS_PATH);
+
+	if (sfs.f_type == TST_DEBUGFS_MAGIC)
+		return;
+
+	if (mount("debugfs", TST_DEBUGFS_PATH, "debugfs", 0, NULL)) {
+		tst_brk(TCONF | TERRNO, "Can't mount debugfs at %s",
+			TST_DEBUGFS_PATH);
+	}
+
+	tst_res(TINFO, "Mounted debugfs at %s", TST_DEBUGFS_PATH);
+	context->debugfs_mounted = 1;
 }
 
 static void prepare_and_mount_hugetlb_fs(void)
@@ -1455,6 +1497,8 @@ static void do_setup(int argc, char *argv[])
 	if (context->tdebug)
 		tst_res(TINFO, "Enabling debug info (level %d)", context->tdebug);
 
+	check_supported_kver();
+
 	if (tst_test->needs_kconfigs && tst_kconfig_check(tst_test->needs_kconfigs))
 		tst_brk(TCONF, "Aborting due to unsuitable kernel config, see above!");
 
@@ -1545,6 +1589,9 @@ static void do_setup(int argc, char *argv[])
 		tst_brk(TBROK,
 			"Two or more of needs_{rofs, devfs, device, hugetlbfs} are set");
 	}
+
+	if (tst_test->needs_debugfs)
+		mount_debugfs();
 
 	if (tst_test->needs_devfs)
 		prepare_and_mount_dev_fs(tst_test->mntpoint);
@@ -1656,6 +1703,11 @@ static void do_cleanup(void)
 
 	if (context->mntpoint_mounted)
 		tst_umount(tst_test->mntpoint);
+
+	if (context->debugfs_mounted) {
+		tst_umount(TST_DEBUGFS_PATH);
+		context->debugfs_mounted = 0;
+	}
 
 	if (tst_test->needs_device && tdev.dev)
 		tst_release_device(tdev.dev);
