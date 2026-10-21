@@ -27,6 +27,7 @@ tst_expiration_timer
 tst_filesystems01
 tst_fuzzy_sync0[1-3]
 tst_needs_cmds0[1-36-8]
+tst_needs_debugfs
 tst_res_hexd
 tst_safe_sscanf
 tst_strstatus}"
